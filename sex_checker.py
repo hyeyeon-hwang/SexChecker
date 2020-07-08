@@ -11,10 +11,10 @@ import pandas as pd
 from sklearn.cluster import KMeans
 
 extended_help = """
-Input the path to the directory containing the bam files.
+Input the path to the directory containing BAM files.
 
-To run:
-python3 sex_checker_final.py --samplesDir /share/lasallelab/Hyeyeon/projects/DS_DBS/all_samples/ --cores 5 --sampleInfo sample_info_master_updated_DS_DBS.csv
+Usage example:
+python3 sex_checker.py --samplesDir ./ --cores 5 --sampleInfo sample_info.csv
 """
 
 # Input command line arguments
@@ -29,7 +29,7 @@ parser.add_argument(
 	type=str,
 	default = None,
 	metavar='<path>',
-	help='path to a directory of all bam files')
+	help='Path to a directory of all BAM files.')
 
 parser.add_argument(
 	'--cores',
@@ -37,7 +37,7 @@ parser.add_argument(
 	type=int,
 	default = 1,
 	metavar='<int>',
-	help='number of cores to use for parallel processing')
+	help='Number of cores to use for parallel processing.')
 
 parser.add_argument(
 	'--sampleInfo',
@@ -45,12 +45,12 @@ parser.add_argument(
 	type=str,
 	default = None,
 	metavar='<path>',
-	help = "path to csv file that contains sex info for each sample")
+	help = "Path to sample info.csv file. Must contain "Name" and "Sex" columns for each sample.")
 	
 arg = parser.parse_args()
 
 # Write print statement outputs to file
-sys.stdout = open(datetime.now().strftime('%I:%M%p_%b%d') + '_sex_checker.print', 'w')
+sys.stdout = open('sex_checker_' + datetime.now().strftime('%I:%M%p_%b%d') + '.print', 'w')
 
 # Traverses through specified directory and all sub directories
 def getBamfiles(path, bamfilePaths):
@@ -61,6 +61,7 @@ def getBamfiles(path, bamfilePaths):
 			bamfilePaths = getBamfiles(item.path, bamfilePaths)
 	return (bamfilePaths)	
 
+# Count number of reads in X and Y chromosomes
 def countSexChrmReads(bamfile):
 	filename = bamfile.split("/")[-1]
 	print(filename)
@@ -176,7 +177,7 @@ def predictSex():
 		
 	stats['Sex_mismatch'] = sexMismatchList
 	stats = stats.sort_values(by = 'Sample_name')
-	stats.to_csv(datetime.now().strftime('%I:%M%p_%b%d') + '_sex_checker_output.txt', sep = '\t', index = False)
+	stats.to_csv('sex_checker_output_' + datetime.now().strftime('%I:%M%p_%b%d') + '.txt', sep = '\t', index = False)
 
 def getSampleInfo(sampleInfoFile, samplename):
 	sampleInfo = pd.read_csv(sampleInfoFile)
@@ -187,8 +188,8 @@ def getSampleInfo(sampleInfoFile, samplename):
 		return trueSex			
 	else:
 		print("Sample info csv file must contain the following columns: 'Name', 'Sex'")
-		# read first line of csv - should contain header
-		# required columns are "Name" and "Sex"
+		# Read first line of csv - should contain header
+		# Required columns are "Name" and "Sex"
 		return 1
 	
 if __name__ == '__main__':
