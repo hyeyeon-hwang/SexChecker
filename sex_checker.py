@@ -15,6 +15,9 @@ Input the path to the directory containing BAM files.
 
 Usage example:
 python3 sex_checker.py --samplesDir ./ --cores 5 --sampleInfo sample_info.csv
+
+7/10/2020:
+python3 DS_neuro_sex_checker.py --samplesDir ./DS_TD_bam/ --cores 4 
 """
 
 # Input command line arguments
@@ -45,7 +48,7 @@ parser.add_argument(
 	type=str,
 	default = None,
 	metavar='<path>',
-	help = "Path to sample info.csv file. Must contain "Name" and "Sex" columns for each sample.")
+	help = "Path to sample info .csv file. Must contain 'Name' and 'Sex' columns for each sample.")
 	
 arg = parser.parse_args()
 
@@ -78,22 +81,29 @@ def countSexChrmReads(bamfile):
 				reads[bamfile][read.reference_name] += 1
 		
 		print(reads[bamfile])
-		
-		trueSex = getSampleInfo(arg.sampleInfo, samplename)
-		
 		sexChrmRatio = reads[bamfile]['chrY']/reads[bamfile]['chrX']
 		print(sexChrmRatio)	
-		tempfile.writerow([
-			samplename,
-			reads[bamfile]['chrX'],
-			reads[bamfile]['chrY'],
-			sexChrmRatio,
-			sexChrmRatio * 100,
-			trueSex
-			#sampleInfo.loc[int(samplename), 'Sex']
-			])
+        		
+		if arg.sampleInfo is None:
+			tempfile.writerow([
+				samplename,
+				reads[bamfile]['chrX'],
+				reads[bamfile]['chrY'],
+				sexChrmRatio,
+				sexChrmRatio * 100
+				])
+		else:
+			recordedSex = getSampleInfo(arg.sampleInfo, samplename)
+			tempfile.writerow([
+				samplename,
+				reads[bamfile]['chrX'],
+				reads[bamfile]['chrY'],
+				sexChrmRatio,
+				sexChrmRatio * 100,
+				recordedSex
+				])
 	
-		print(datetime.now())	
+	print(datetime.now())	
 
 def predictSex():
 	stats = pd.read_csv("tempfile.txt", sep='\t', engine='python', header=0)
@@ -140,42 +150,43 @@ def predictSex():
 	# Add 'Sex_mismatch' column for any mismatches in the 'Sample_info_sex' and 'Predicted_sex' columns
 	# Rows with mismatches are labeled as 'Mismatch'
 	# Rows with consistent sex labels are marked with '.'
-	sexMismatchList = ['.'] * len(stats.index)
-	sampleInfoSex = []
-	for i in range(0, len(stats.index)):
-		if stats['Sample_info_sex'][i] in ('M' or 'm' or 'Male' or 'male'): 
-			sampleInfoSex.append('M')
-		if stats['Sample_info_sex'][i] in ('F' or 'f' or 'Female' or 'female'):
-			sampleInfoSex.append('F')
-
-	for i in range(0, len(stats.index)):
-		if sampleInfoSex[i] != stats['Predicted_sex'][i]:
-			print(sampleInfoSex)
-			print(stats['Predicted_sex'])
-			if stats['Predicted_sex'][i] != "all M or all F":
-				sexMismatchList[i] = "Mismatch"
+	if arg.sampleInfo is not None:
+		sexMismatchList = ['.'] * len(stats.index)
+		sampleInfoSex = []
+		for i in range(0, len(stats.index)):
+			if stats['Sample_info_sex'][i] in ('M' or 'm' or 'Male' or 'male'): 
+				sampleInfoSex.append('M')
+			if stats['Sample_info_sex'][i] in ('F' or 'f' or 'Female' or 'female'):
+				sampleInfoSex.append('F')
 	
-	print(sexMismatchList)	
-	if len(set(stats['Predicted_sex'])) == 1:
-		if len(set(stats['Sample_info_sex'])) != 1:
-			sampleInfoMaleCount = sampleInfoSex.count('M')
-			sampleInfoFemaleCount = sampleInfoSex.count('F')
-			maxCount = max(sampleInfoMaleCount, sampleInfoFemaleCount)
-			if maxCount == sampleInfoMaleCount:
-			# Mark females as mismatch
-				for i in range(0, len(sampleInfoSex)):
-					if sampleInfoSex[i] == 'F':
-						sexMismatchList[i] = "Mismatch"
-			else:
-			# Mark males as mismatch
-				for i in range(0, len(sampleInfoSex)):
-					if sampleInfoSex[i] == 'M':
-						sexMismatchList[i] = "Mismatch"
-
-	# Find sex of minority sex in list
-	# Set index of that sex to be mismatches
+		for i in range(0, len(stats.index)):
+			if sampleInfoSex[i] != stats['Predicted_sex'][i]:
+				print(sampleInfoSex)
+				print(stats['Predicted_sex'])
+				if stats['Predicted_sex'][i] != "all M or all F":
+					sexMismatchList[i] = "Mismatch"
 		
-	stats['Sex_mismatch'] = sexMismatchList
+		print(sexMismatchList)	
+		if len(set(stats['Predicted_sex'])) == 1:
+			if len(set(stats['Sample_info_sex'])) != 1:
+				sampleInfoMaleCount = sampleInfoSex.count('M')
+				sampleInfoFemaleCount = sampleInfoSex.count('F')
+				maxCount = max(sampleInfoMaleCount, sampleInfoFemaleCount)
+				if maxCount == sampleInfoMaleCount:
+				# Mark females as mismatch
+					for i in range(0, len(sampleInfoSex)):
+						if sampleInfoSex[i] == 'F':
+							sexMismatchList[i] = "Mismatch"
+				else:
+				# Mark males as mismatch
+					for i in range(0, len(sampleInfoSex)):
+						if sampleInfoSex[i] == 'M':
+							sexMismatchList[i] = "Mismatch"
+	
+		# Find sex of minority sex in list
+		# Set index of that sex to be mismatches
+			
+		stats['Sex_mismatch'] = sexMismatchList
 	stats = stats.sort_values(by = 'Sample_name')
 	stats.to_csv('sex_checker_output_' + datetime.now().strftime('%I:%M%p_%b%d') + '.txt', sep = '\t', index = False)
 
@@ -184,8 +195,8 @@ def getSampleInfo(sampleInfoFile, samplename):
 	
 	if 'Sex' in sampleInfo.columns and 'Name' in sampleInfo.columns:
 		sampleInfo.index = list(sampleInfo['Name']) 
-		trueSex = sampleInfo.loc[str(samplename), 'Sex']
-		return trueSex			
+		recordedSex = sampleInfo.loc[str(samplename), 'Sex']
+		return recordedSex			
 	else:
 		print("Sample info csv file must contain the following columns: 'Name', 'Sex'")
 		# Read first line of csv - should contain header
@@ -204,12 +215,20 @@ if __name__ == '__main__':
 	print('getBamfiles() %s' % (end_1 - timestart))
 	
 
-	samplenames = []
-	for bamfile in bamfilePaths:
-		filename = bamfile.split("/")[-1]
-		print(filename)
-		samplename = filename.split("_")[0]
-		samplenames.append(samplename)
+    #	samplenames = []
+    #	for bamfile in bamfilePaths:
+    #		filename = bamfile.split("/")[-1]
+    #		print(filename)
+    #		samplename = filename.split("_")[0]
+    #		samplenames.append(samplename)
+	if arg.sampleInfo is None:
+		with open('tempfile.txt', 'w', newline='') as tempfile:
+			tempfile = csv.writer(tempfile, delimiter='\t')
+			tempfile.writerow([
+				'Sample_name', 'ChrX_reads', 'ChrY_reads', 
+				'ChrY:ChrX_ratio', 'ChrY:ChrX_percent'
+				])
+	else:
 		with open('tempfile.txt', 'w', newline='') as tempfile:
 			tempfile = csv.writer(tempfile, delimiter='\t')
 			tempfile.writerow([
